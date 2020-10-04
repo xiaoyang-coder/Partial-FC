@@ -10,7 +10,7 @@ from sklearn import preprocessing
 import torch 
 from torchvision import transforms
 sys.path.append('/root/xy/work_dir/xyface/')
-from  backbones import iresnet50
+from  backbones import iresnet50,iresnet100
 from torch.nn.parallel import DistributedDataParallel
 
 

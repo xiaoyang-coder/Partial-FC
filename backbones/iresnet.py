@@ -80,7 +80,7 @@ class IResNet(nn.Module):
         self.base_width = width_per_group
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=3, stride=1, padding=1,
                                bias=False)
-        self.bn1 = nn.BatchNorm2d(self.inplanes, eps=1e-05,  )
+        self.bn1 = nn.BatchNorm2d(self.inplanes, eps=1e-05)
         self.prelu = nn.PReLU(self.inplanes)
         self.layer1 = self._make_layer(block, 64, layers[0], stride=2)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2,
@@ -92,7 +92,7 @@ class IResNet(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
         self.bn2 = nn.BatchNorm2d(512 * block.expansion, eps=1e-05,)
-        self.dropout = nn.Dropout2d(p=0.4, inplace=True)
+        self.dropout = nn.Dropout(p=0.4, inplace=True)
         self.fc = nn.Linear(512 * block.expansion * self.fc_scale, num_features)
         self.features = nn.BatchNorm1d(num_features, eps=1e-05,)
 
@@ -141,8 +141,8 @@ class IResNet(nn.Module):
         x = self.layer4(x)
 
         x = self.bn2(x)
-        x = self.dropout(x)
         x = torch.flatten(x, 1)
+        # x = self.dropout(x)
         x = self.fc(x)
         x = self.features(x)
 

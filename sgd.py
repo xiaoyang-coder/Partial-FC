@@ -1,50 +1,7 @@
 import torch
 from torch.optim.optimizer import Optimizer, required
+
 class SGD(Optimizer):
-    r"""Implements stochastic gradient descent (optionally with momentum).
-
-    Nesterov momentum is based on the formula from
-    `On the importance of initialization and momentum in deep learning`__.
-
-    Args:
-        params (iterable): iterable of parameters to optimize or dicts defining
-            parameter groups
-        lr (float): learning rate
-        momentum (float, optional): momentum factor (default: 0)
-        weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
-        dampening (float, optional): dampening for momentum (default: 0)
-        nesterov (bool, optional): enables Nesterov momentum (default: False)
-
-    Example:
-        >>> optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
-        >>> optimizer.zero_grad()
-        >>> loss_fn(model(input), target).backward()
-        >>> optimizer.step()
-
-    __ http://www.cs.toronto.edu/%7Ehinton/absps/momentum.pdf
-
-    .. note::
-        The implementation of SGD with Momentum/Nesterov subtly differs from
-        Sutskever et. al. and implementations in some other frameworks.
-
-        Considering the specific case of Momentum, the update can be written as
-
-        .. math::
-                  v_{t+1} = \mu * v_{t} + g_{t+1} \\
-                  p_{t+1} = p_{t} - lr * v_{t+1}
-
-        where p, g, v and :math:`\mu` denote the parameters, gradient,
-        velocity, and momentum respectively.
-
-        This is in contrast to Sutskever et. al. and
-        other frameworks which employ an update of the form
-
-        .. math::
-             v_{t+1} = \mu * v_{t} + lr * g_{t+1} \\
-             p_{t+1} = p_{t} - v_{t+1}
-
-        The Nesterov version is analogously modified.
-    """
 
     def __init__(self, params, lr=required, momentum=0, dampening=0,
                  weight_decay=0, nesterov=False,rescale=1):
@@ -68,12 +25,6 @@ class SGD(Optimizer):
             group.setdefault('nesterov', False)
 
     def step(self, closure=None):
-        """Performs a single optimization step.
-
-        Arguments:
-            closure (callable, optional): A closure that reevaluates the model
-                and returns the loss.
-        """
         loss = None
         if closure is not None:
             loss = closure()
@@ -88,24 +39,22 @@ class SGD(Optimizer):
                 if p.grad is None:
                     continue
                 p.grad.data.div_(self.rescale)
-                # p.grad.data.clamp_(min=-10, max=10)
-                # torch.nn.utils.clip_grad_norm_(p,2)
                 d_p = p.grad.data
                 if weight_decay != 0:
-                    d_p.add_(weight_decay, p.data)
+                    d_p.add_(alpha=weight_decay,other=p.data)
                 if momentum != 0:
                     param_state = self.state[p]
                     if 'momentum_buffer' not in param_state:
                         buf = param_state['momentum_buffer'] = torch.clone(d_p).detach()
                     else:
                         buf = param_state['momentum_buffer']
-                        buf.mul_(momentum).add_(1 - dampening, d_p)
+                        buf.mul_(momentum).add_(other=d_p,alpha=1 - dampening)
                     if nesterov:
-                        d_p = d_p.add(momentum, buf)
+                        d_p = d_p.add(alpha=momentum,other=buf)
                     else:
                         d_p = buf
 
-                p.data.add_(-group['lr'], d_p)
+                p.data.add_(other=d_p,alpha=-group['lr'])
 
         return loss
 
