@@ -1,30 +1,35 @@
-from torch.utils.data import DataLoader, Dataset
-import os
-import torch
-import torchvision
-from torchvision import transforms
 import numbers
-import numpy as np
-import mxnet as mx
-import threading
-import sys
+import os
 import queue as Queue
+import threading
+
+import mxnet as mx
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms
+
+TFS = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+])
+
 
 class BackgroundGenerator(threading.Thread):
-    def __init__(self, generator,local_rank ,max_prefetch=6):
-        super(BackgroundGenerator,self).__init__()
+    def __init__(self, generator, local_rank, max_prefetch=6):
+        super(BackgroundGenerator, self).__init__()
         self.queue = Queue.Queue(max_prefetch)
         self.generator = generator
         self.local_rank = local_rank
         self.daemon = True
         self.start()
-    
+
     def run(self):
         torch.cuda.set_device(self.local_rank)
         for item in self.generator:
             self.queue.put(item)
         self.queue.put(None)
-        
+
     def next(self):
         next_item = self.queue.get()
         if next_item is None:
@@ -37,8 +42,9 @@ class BackgroundGenerator(threading.Thread):
     def __iter__(self):
         return self
 
+
 class DataLoaderX(DataLoader):
-    def __init__(self,local_rank, **kwargs):
+    def __init__(self, local_rank, **kwargs):
         super(DataLoaderX, self).__init__(**kwargs)
         self.stream = torch.cuda.Stream(local_rank)
         self.local_rank = local_rank
@@ -48,15 +54,15 @@ class DataLoaderX(DataLoader):
         self.iter = BackgroundGenerator(self.iter, self.local_rank)
         self.preload()
         return self
-        
+
     def preload(self):
-        self.batch = next(self.iter,None)
+        self.batch = next(self.iter, None)
         if self.batch is None:
             return None
         with torch.cuda.stream(self.stream):
             for k in range(len(self.batch)):
                 self.batch[k] = self.batch[k].to(device=self.local_rank, non_blocking=True)
-                    
+
 
     def __next__(self):
         torch.cuda.current_stream().wait_stream(self.stream)
@@ -66,12 +72,8 @@ class DataLoaderX(DataLoader):
         self.preload()
         return batch
 
-TFS=transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5, 0.5, 0.5],std=[0.5, 0.5, 0.5]),
-])
 
-class MXFaceDataset (Dataset):
+class MXFaceDataset(Dataset):
     def __init__(self, root_dir, local_rank, transform=TFS):
         super(MXFaceDataset, self).__init__()
         self.transform = transform
@@ -89,8 +91,8 @@ class MXFaceDataset (Dataset):
             self.imgidx = np.array(range(1, int(header.label[0])))
         else:
             self.imgidx = np.array(list(self.imgrec.keys))
-            print("Number of Samples:{}". format(len(self.imgidx)))
-                
+            print("Number of Samples:{}".format(len(self.imgidx)))
+
 
     def __getitem__(self, index):
         # index =0
@@ -104,29 +106,29 @@ class MXFaceDataset (Dataset):
         sample = mx.image.imdecode(img).asnumpy()
         if self.transform is not None:
             sample = self.transform(sample)
-        return sample,label
+        return sample, label
 
     def __len__(self):
         return len(self.imgidx)
 
 
-if __name__ == "__main__":
-    # /root/xy/face/faces_emore
-    # /root/face_datasets/webface/
-    trainset = MXFaceDataset(root_dir='/root/xy/face/faces_emore',local_rank=0)
-    torch.cuda.set_device(2)
-    trainloader = DataLoaderX(local_rank=0,
-        dataset=trainset, batch_size=128, #sampler=train_sampler,
-        num_workers=0,pin_memory=True,drop_last=False)
-    print(len(trainset))
-    
-    for step,(img,label) in enumerate(trainloader):
-        # print(img.max(),img.min())
-        img=img.cuda(non_blocking=True)
-        label=label.cuda(non_blocking=True)
-        print(img,label,label.device)
-        del img,label
-        # img=torchvision.utils.make_grid(img,nrow=8)
-        # torchvision.utils.save_image(img,'tmp.jpg')
-        # print(label)
-        # break;
+# if __name__ == "__main__":
+#     # /root/xy/face/faces_emore
+#     # /root/face_datasets/webface/
+#     trainset = MXFaceDataset(root_dir='/root/xy/face/faces_emore', local_rank=0)
+#     torch.cuda.set_device(2)
+#     trainloader = DataLoaderX(local_rank=0,
+#         dataset=trainset, batch_size=128,  # sampler=train_sampler,
+#         num_workers=0, pin_memory=True, drop_last=False)
+#     print(len(trainset))
+#
+#     for step, (img, label) in enumerate(trainloader):
+#         # print(img.max(),img.min())
+#         img = img.cuda(non_blocking=True)
+#         label = label.cuda(non_blocking=True)
+#         print(img, label, label.device)
+#         del img, label
+#         # img=torchvision.utils.make_grid(img,nrow=8)
+#         # torchvision.utils.save_image(img,'tmp.jpg')
+#         # print(label)
+#         # break;
